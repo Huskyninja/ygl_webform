@@ -1,0 +1,50 @@
+<?php
+
+/**
+ * @file
+ * You've Got Leads Webforms installation.
+ */
+ 
+/**
+ * Implements hook_install()
+ */
+ 
+function you_got_leads_webform_install() {
+	
+	// Set the default variables
+	
+	variable_set('you_got_leads_webform_username', 'username');
+	variable_set('you_got_leads_webform_password', 'password');
+	variable_set('you_got_leads_lead_source_name', 'Web-Form Lead');
+	variable_set('you_got_leads_lead_source_id', '2286386')
+	variable_set('you_got_leads_webform_id', 'webform_client_form_###');
+	variable_set('you_got_leads_webform_debug', 1);
+	
+	// Get localization function for installation as t() may be unavailable.
+	$t = get_t();
+	
+	// Give user feedback
+	drupal_set_message($t('Youve Got Leads Webform variables created.'));
+	
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+ 
+function you_got_leads_webform_uninstall() {
+	
+	variable_del('you_got_leads_webform_username');
+	variable_del('you_got_leads_webform_password');
+	variable_del('you_got_leads_lead_source_name');
+	variable_del('you_got_leads_lead_source_id');
+	variable_del('you_got_leads_webform_id');
+	variable_del('you_got_leads_webform_debug');
+	
+	// Get localization function for installation as t() may be unavailable.
+	$t = get_t();
+	
+	// Give user feedback
+	drupal_set_message($t('Youve Got Leads Webform variables have been removed.'));
+	
+}

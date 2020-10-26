@@ -1,0 +1,7 @@
+name = You've Got Leads Webform
+description = You've Got Leads Contact Save RESTful API integration with Drupal Webforms.
+core = 7.x
+version = 7.x-0.3-dev
+package = Webform
+dependencies[] = webform
+configure = admin/config/services/you_got_leads

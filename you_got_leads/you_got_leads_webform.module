@@ -1,0 +1,342 @@
+<?php
+
+/**
+ * @file
+ * Integrate You've Got Leads and Drupal Webforms by sending json data using curl.
+ */
+ 
+/**
+ * Implements hook_help().
+ */
+
+function you_got_leads_webform_help($path, $arg) {
+	switch ($path) {
+		case 'admin/help#you_got_leads_webform':{
+			$ret_val = '<h3>' . t('About') . '</h3>';
+			$ret_val .= '<p>' . t('Integrates You\'ve Got Leads CRM /leads endpoint with forms created with the Webforms module using curl.') . '</p>';
+			$ret_val .= '<h3>' . t('Instructions') . '</h3>';
+			$ret_val .= '<p>' . t('The module only captures the values listed below. To captures these values, set the Key of the form fields fields in the Webform to the following (You\'ve Got Leads field name - Key):') . '</p>';
+			$ret_val .= '<ul>';
+			$ret_val .= '<li>' . t('PrimaryContact FirstName - FirstName') . '</li>';
+			$ret_val .= '<li>' . t('PrimaryContact LastName - LastName') . '</li>';
+			$ret_val .= '<li>' . t('PrimaryContact Address Address1 - Address1') . '</li>';
+			$ret_val .= '<li>' . t('PrimaryContact Address City - City') . '</li>';
+			$ret_val .= '<li>' . t('PrimaryContact Address State - State') . '</li>';
+			$ret_val .= '<li>' . t('PrimaryContact Address Zip - Zip') . '</li>';
+			$ret_val .= '<li>' . t('PrimaryContact Address Email - Email') . '</li>';
+			$ret_val .= '<li>' . t('PrimaryContact Address PhoneHome - PhoneHome') . '</li>';
+			$ret_val .= '</ul>';
+			$ret_val .= '<p>' . t('A ProperityId field must also be included with the form.') . '</p>';
+			$ret_val .= '<ul>';
+			$ret_val .= '<li>' . t('PropertyId - PropertyId') . '</li>';
+			$ret_val .= '</ul>';
+			$ret_val .= '<p>' . t('This is the target property for the form, and is needed in the construction of the endpoint URL. It is recommended that this be a hidden field type. Only one Property ID can be used at a time.') . '</p>';
+			$ret_val .= '<p>' . t('Important: ProperityId must be set in the form or the form will not be sent to You\'ve Got Leads.') . '</p>';
+			$ret_val .= '<p>' . t('If the Key is not set in the form, it will not be included. There are no required fields by You\'ve Got Leads, but this module does require a hidden field named PropertyId.') . '</p>';
+			return $ret_val;
+			break;
+		}
+	}
+}
+
+/**
+ * Implements hook_permission().
+ */
+ 
+function you_got_leads_webform_permission() {
+	
+	return array(
+	
+		'administer you got leads webform' => array(
+			'title' => t('Administer You\'ve Got Leads Webform Integration'),
+			'description' => t('Perform administrative tasks on You\'ve Got Leads Webform Integration'),
+		),
+	
+	);
+	
+}
+
+ /**
+ * Find out if the form that was submitted is a form to be sent to Emfluence
+ *
+ * Implements hook_form_alter().
+ */
+
+function you_got_leads_webform_form_alter(&$form, &$form_state, $form_id) {
+
+	$active_form = variable_get('you_got_leads_webform_id');
+	// $form_arr = explode(",",$active_form);
+	$form_arr = array_map('trim', explode(",", $active_form));
+	
+	$quickSet = 1;
+
+	foreach ($form_arr as $form_value) {
+		if ($form_id == $form_value) {
+			$form['#submit'][] = 'you_got_leads_webform_quickset';
+		}
+	}
+
+}
+
+/**
+ * Format the webform data by looping through the form submission, assigning a key / value based on the submission variable name and value, and then formatting into json
+ */
+
+function you_got_leads_webform_quickset(&$form, &$form_state) {
+	
+	$quickData = array();
+	$useQuickSet = 1;
+	
+	$lead_source_name = variable_get('you_got_leads_lead_source_name');
+	$lead_source_id = (int)trim(variable_get('you_got_leads_lead_source_id'));
+	
+	$ReferralSources = array(
+		array(
+			'LeadSourceName' => $lead_source_name,
+			'LeadSourceId' => $lead_source_id,
+			'LeadSourceRank' => 1,
+		),
+	);
+	
+	$quickData['ReferralSources'] = $ReferralSources;
+	
+	foreach ($form['submitted'] as $key => $value) {
+		
+		if (substr($key, 0, 1) != "#") {
+			
+			if ( $key == "FirstName" ) {
+				$quickData['PrimaryContact']['FirstName'] = $form['submitted'][$key]['#value'];
+			}
+			
+			if ( $key == "LastName" ) {
+				$quickData['PrimaryContact']['LastName'] = $form['submitted'][$key]['#value'];
+			}
+			
+			if ( $key == "Email" ) {
+				$quickData['PrimaryContact']['Address']['Email'] = $form['submitted'][$key]['#value'];
+			}
+			
+			if ( $key == "PhoneHome" ) {
+				$quickData['PrimaryContact']['Address']['PhoneHome'] = $form['submitted'][$key]['#value'];
+			}
+			
+			if ( $key == "Address1" ) {
+				$quickData['PrimaryContact']['Address']['Address1'] = $form['submitted'][$key]['#value'];
+			}
+
+			if ( $key == "City" ) {
+				$quickData['PrimaryContact']['Address']['City'] = $form['submitted'][$key]['#value'];
+			}
+			
+			if ( $key == "State" ) {
+				$quickData['PrimaryContact']['Address']['State'] = $form['submitted'][$key]['#value'];
+			}
+			
+			if ( $key == "Zip" ) {
+				$quickData['PrimaryContact']['Address']['Zip'] = $form['submitted'][$key]['#value'];
+			}
+			
+			if ($key == "PropertyId") {
+				$PropertyId = $form['submitted'][$key]['#value'];
+				
+				if ($PropertyId == 0) {
+					watchdog('You\'ve Got Leads Webform', 'Unsupported Property ID. Exiting Application.');
+					return false;
+				}
+			}
+			
+		}
+	}
+	
+	if (!isset($PropertyId)) {
+		watchdog('You\'ve Got Leads Webform', 'No Property ID has been detected or is not configured. Please double check your webform. Exiting Application.', WATCHDOG_ERROR);
+		return false;
+	}
+
+	$jsonQuery = $quickData;
+
+	$quickQuery = json_encode($jsonQuery);
+	
+	you_got_leads_webform_cURL($quickQuery, $useQuickSet, $PropertyId);
+	
+	// watchdog('Emfluence Webform', 'The JSON output is '.print_r($quickQuery, TRUE));
+	
+}
+
+/**
+ * Send the data to emfluence using cURL
+ *
+ * @param string
+ * 	The content of the webform formatted as json to be sent
+ * 
+ * @param boolean
+ * 	The check value to see what form of encoding was used to create the json (param unused - the 'quickset' process is always used)
+ *
+ */
+
+function you_got_leads_webform_cURL($yglQuery, $reportQuickSet, $PropertyId) {
+	
+	$url = 'https://www.youvegotleads.com/api/properties/' . $PropertyId . '/leads';
+	
+	$reportQuickSet = 0;
+	
+	$debug = variable_get('you_got_leads_webform_debug');
+	
+	$username = variable_get('you_got_leads_webform_username');
+	$password = variable_get('you_got_leads_webform_password');
+	
+	// $auth_key = variable_get('you_got_leads_webform_auth');
+	
+	$auth_key = $username . ':' . $password;
+	
+	$encode_key = base64_encode($auth_key);
+	
+	// watchdog('You\'ve Got Leads Webform', 'username: ' . print_r($username,TRUE) . '<br>password: ' . print_r($password,TRUE) . '<br>Auth Key: ' . print_r($auth_key,TRUE) . '<br>Encode Key: ' . print_r($encode_key,TRUE));
+	
+	// $debug = 1;
+	
+	$ch = curl_init();
+	curl_setopt($ch, CURLOPT_URL, $url);
+	curl_setopt($ch, CURLOPT_POSTFIELDS, $yglQuery);
+	curl_setopt($ch, CURLOPT_POST, 1);
+	curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 15);
+	curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+	curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+	curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+	curl_setopt($ch, CURLINFO_HEADER_OUT, true);
+	
+	curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+		'Authorization: BASIC ' . $encode_key,
+		'Accept: application/json',
+		'Content-Type: application/json',
+		)
+	);
+	
+	$result = curl_exec($ch);
+    $error = curl_error($ch);
+	$information = curl_getinfo($ch);
+	
+	$info = curl_getinfo($ch);
+
+	$response = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+	
+	$fullBack = array();
+	$fullBack = json_decode($result);
+	
+	if ($result === FALSE) {
+		watchdog('You\'ve Got Leads Webform', 'Failed to post using cURL:<br>' . print_r($yglQuery,TRUE) . '<br>Target URL: ' . print_r($url,TRUE) . '<br>Error: ' . print_r(curl_error($ch),TRUE) . '<br>Error Code: ' . print_r(curl_errno($ch),TRUE), array(), WATCHDOG_ERROR);
+	} else {
+		if ($debug == 1) {
+			watchdog('You\'ve Got Leads Webform', 'Posted the following using cURL:<br>' . print_r($yglQuery,TRUE) . '<br>Target URL: ' . print_r($url,TRUE) . '<br>Response: ' . print_r($response,TRUE));
+			watchdog('You\'ve Got Leads Webform', 'cURL Response Header: <br>' . print_r($result,TRUE));
+			watchdog('You\'ve Got Leads Webform', 'cURL Post Header: <br>' . print_r($information,TRUE));
+		}
+	}
+	
+	curl_close($ch);	
+	
+}
+
+/**
+ * Drupal admin functions
+ *
+ * Implements hook_menu().
+ **/
+
+function you_got_leads_webform_menu() {
+  $items = array();
+
+  $items['admin/config/services/you_got_leads'] = array(
+    'title' => 'You\'ve Got Leads Contact Save Settings',
+    'description' => 'Administer integration of Drupal 7 Webforms and Youve Got Leads CRM.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('you_got_leads_webform_admin_settings_form'),
+    'access arguments' => array('administer you got leads webform'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_form().
+ */
+
+function you_got_leads_webform_admin_settings_form($node, &$form_state) {
+	
+	$form = array();
+	
+	$form['you_got_leads_webform_username'] = array(
+		'#title' => t('Username'),
+		'#description' => ('The You\'ve Got Leads Username. This is provided by You\'ve Got Leads to connect to the remote API.'),
+		'#type' => 'textfield',
+		'#default_value' => variable_get('you_got_leads_webform_username'),
+		'#required' => TRUE,
+	);
+	
+	$form['you_got_leads_webform_password'] = array(
+		'#title' => t('Password'),
+		'#description' => ('The You\'ve Got Leads Password. This is provided by You\'ve Got Leads to connect to the remote API.'),
+		'#type' => 'textfield',
+		'#default_value' => variable_get('you_got_leads_webform_password'),
+		'#required' => TRUE,
+	);
+	
+	$form['you_got_leads_lead_source_name'] = array(
+		'#title' => t('You\'ve Got Leads Lead Source Name'),
+		'#description' => t('The Lead Source Name (LeadSourceName) for leads sent from this web site. This is provided by You\'ve Got Leads.'),
+		'#type' => 'textfield',
+		'#size' => 100,
+		'#default_value' => variable_get('you_got_leads_lead_source_name'),
+		'#required' => FALSE,
+	);
+	
+	$form['you_got_leads_lead_source_id'] = array(
+		'#title' => t('You\'ve Got Leads Lead Source ID'),
+		'#description' => t('The Lead Source Name (LeadSourceId) for leads sent from this web site. This is provided by You\'ve Got Leads.'),
+		'#type' => 'textfield',
+		'#size' => 100,
+		'#default_value' => variable_get('you_got_leads_lead_source_id'),
+		'#required' => FALSE,
+	);
+
+	$form['you_got_leads_webform_id'] = array(
+		'#title' => t('Webform Form IDs'),
+		'#description' => t('Enter Webform IDs [e.g. webform_client_form_###]. To enter more than one, seperate each ID with a comma.'),
+		'#type' => 'textfield',
+		'#size' => 100,
+		'#default_value' => variable_get('you_got_leads_webform_id'),
+		'#required' => TRUE,
+	);
+	
+	$form['you_got_leads_webform_debug'] = array(
+		'#title' => t('Debug Mode'),
+		'#description' => t('Turns on verbose logging. Without this set, only Error conditions will be reported. Useful for checking the POST string and server response.'),
+		'#type' => 'checkbox',
+		'#default_value' => variable_get('you_got_leads_webform_debug'),
+		'#required' => FALSE,
+	);
+
+	return system_settings_form($form);
+
+}
+
+/**
+ * Validate form settings
+ */
+ 
+function you_got_leads_webform_admin_settings_form_validate($form, &$form_state) {
+	
+	// we don't need this anymore - keeping in case I change my mind
+	// regular expression for validating urls	
+	/*
+	$url_regex = '/\b(?:(?:https?|ftp):\/\/|www\.)[-a-z0-9+&@#\/%?=~_|!:,.;]*[-a-z0-9+&@#\/%=~_|]/i';
+	
+	$emfluence_form_url = $form_state['values']['emfluence_webform_url'];
+	
+	if (!preg_match($url_regex, $emfluence_form_url)) {
+		form_set_error('emfluence_webform_url', t('Invalid URL.'));
+	}
+	*/
+	return true;
+}
