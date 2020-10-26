@@ -32,3 +32,6 @@ This is the target property for the form, and is needed in the construction of t
 Important: ProperityId must be set in the form or the form will not be sent to You've Got Leads.
 
 If the Key is not set in the form, it will not be included. There are no required fields by You've Got Leads, but this module does require a field named PropertyId.
+
+## Note
+This module should be considered minimally maintained, and is shared without guarantee or otherwise. It is hoped that sharing this here will be of some small benefit to your project.
